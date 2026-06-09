@@ -1,417 +1,718 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebPhone Teleop</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0d1117;
-            color: #e6edf3;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 10px;
-        }
-        .container { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 14px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Zhangjiang Robotics</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-        .status-bar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-        .dot-green { background: #3fb950; }
-        .dot-red { background: #f85149; }
-        .dot-blue { background: #58a6ff; }
-        .dot-gray { background: #30363d; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0a0e14; color: #c9d1d9;
+  touch-action: none; overscroll-behavior: none;
+  user-select: none; -webkit-user-select: none;
+}
 
-        .qr-section { text-align: center; }
-        .qr-section h2 { font-size: 15px; margin-bottom: 8px; color: #8b949e; }
-        .qr-section img { width: 180px; height: 180px; border: 2px solid #30363d; border-radius: 8px; }
-        .qr-url { font-size: 11px; color: #58a6ff; margin-top: 6px; word-break: break-all; }
+.container { width: 100%; height: 100%; display: flex; flex-direction: column; }
 
-        .sensor-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; }
-        .sensor-item { background: #0d1117; border-radius: 8px; padding: 10px 4px; }
-        .sensor-label { font-size: 11px; color: #8b949e; margin-bottom: 4px; }
-        .sensor-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .sensor-live .sensor-value { color: #58a6ff; }
-        .sensor-count { text-align: center; font-size: 12px; color: #8b949e; margin-top: 6px; }
+/* ── Status bar ── */
+.status-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px; font-size: 10px; gap: 6px;
+  background: #0d1117; border-bottom: 1px solid #21262d; flex-shrink: 0;
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot-green { background: #3fb950; } .dot-red { background: #f85149; }
+.status-left { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.toggle-row { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.toggle-label { font-size: 10px; white-space: nowrap; }
+.toggle { position: relative; width: 34px; height: 18px; cursor: pointer; flex-shrink: 0; }
+.toggle input { display: none; }
+.toggle-slider { position: absolute; inset: 0; background: #30363d; border-radius: 18px; transition: 0.2s; }
+.toggle-slider::before { content: ''; position: absolute; width: 12px; height: 12px;
+  left: 3px; bottom: 3px; background: #e6edf3; border-radius: 50%; transition: 0.2s; }
+.toggle input:checked + .toggle-slider { background: #238636; }
+.toggle input:checked + .toggle-slider::before { transform: translateX(14px); }
+.status-info { display: flex; align-items: center; gap: 6px; font-size: 10px; flex-shrink: 0; }
 
-        .control-row { display: flex; gap: 8px; align-items: center; }
-        .btn {
-            flex: 1; padding: 12px 8px; border: 1px solid #30363d;
-            border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-            background: #21262d; color: #e6edf3; transition: background 0.15s; user-select: none;
-        }
-        .btn:active { background: #30363d; }
-        .btn.primary { background: #238636; border-color: #2ea043; }
-        .btn.danger { background: #da3633; border-color: #f85149; }
-        .btn.active { background: #1f6feb; border-color: #388bfd; }
+/* ── Main area ── */
+.main-area { flex: 1; display: flex; flex-direction: row; min-height: 0; }
+.panel { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #161b22; }
+.panel:last-child { border-right: none; }
+.panel.disabled { opacity: 0.3; pointer-events: none; }
+.panel-hdr { text-align: center; font-size: 11px; font-weight: 600; color: #6e7681;
+  padding: 5px 0 2px; flex-shrink: 0; }
 
-        .toggle-container { display: flex; align-items: center; justify-content: space-between; }
-        .toggle-label { font-size: 15px; font-weight: 600; }
-        .toggle { position: relative; width: 52px; height: 28px; cursor: pointer; }
-        .toggle input { display: none; }
-        .toggle-slider {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: #30363d; border-radius: 28px; transition: 0.2s;
-        }
-        .toggle-slider::before {
-            content: ''; position: absolute; width: 22px; height: 22px;
-            left: 3px; bottom: 3px; background: #e6edf3; border-radius: 50%; transition: 0.2s;
-        }
-        .toggle input:checked + .toggle-slider { background: #238636; }
-        .toggle input:checked + .toggle-slider::before { transform: translateX(24px); }
+/* ── Left: XY Joystick + position readout ── */
+.panel-left-body {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px; gap: 4px;
+}
+.joystick-circle {
+  position: relative;
+  width: min(44vw, 220px); height: min(44vw, 220px);
+  border-radius: 50%; border: 2px solid #30363d;
+  background: radial-gradient(circle at 50% 50%, #161b22 60%, #0d1117);
+  touch-action: none;
+}
+.joystick-circle::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, transparent 49.5%, #1c2128 49.5%, #1c2128 50.5%, transparent 50.5%),
+    linear-gradient(0deg, transparent 49.5%, #1c2128 49.5%, #1c2128 50.5%, transparent 50.5%);
+  pointer-events: none;
+}
+/* Base exclusion zone ring — don't enter this area */
+.joystick-circle::before {
+  content: ''; position: absolute; border-radius: 50%;
+  border: 1.5px dashed rgba(248,81,73,0.3);
+  pointer-events: none; z-index: 2;
+  /* Position set dynamically via JS based on exclusion radius */
+}
+.joystick-thumb {
+  position: absolute; width: 26%; height: 26%; border-radius: 50%;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 30%, #79c0ff, #1f6feb);
+  box-shadow: 0 0 12px rgba(31,111,235,0.45);
+  pointer-events: none; transition: none;
+}
+.joystick-thumb.active { box-shadow: 0 0 24px rgba(31,111,235,0.75); }
+/* Workspace overlay SVG */
+.workspace-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 1; opacity: 0.85;
+}
+.pos-readout {
+  font-size: 10px; color: #58a6ff; font-variant-numeric: tabular-nums;
+  text-align: center; line-height: 1.4;
+}
 
-        .slider-row { display: flex; align-items: center; gap: 10px; }
-        .slider-row label { font-size: 13px; color: #8b949e; white-space: nowrap; }
-        .slider-row input[type=range] {
-            flex: 1; -webkit-appearance: none; height: 6px;
-            background: #30363d; border-radius: 3px; outline: none;
-        }
-        .slider-row input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 20px; height: 20px;
-            background: #58a6ff; border-radius: 50%; cursor: pointer;
-        }
-        .slider-val { font-size: 14px; font-weight: 600; min-width: 32px; text-align: center; }
-        .hidden { display: none !important; }
+/* ── Right: Gripper + Z + Roll ── */
+.panel-right-body {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 6px 10px; gap: 8px; justify-content: center;
+}
+.grip-row { display: flex; gap: 6px; }
+.grip-btn {
+  flex: 1; padding: 16px 4px; border: 2px solid; border-radius: 10px;
+  background: #0d1117; font-size: 16px; font-weight: 700;
+  cursor: pointer; text-align: center;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.grip-btn.open  { border-color: #238636; color: #3fb950; }
+.grip-btn.open.pressed  { background: #0b2e1a; }
+.grip-btn.close { border-color: #da3633; color: #f85149; }
+.grip-btn.close.pressed { background: #2e1113; }
 
-        .msg { text-align: center; font-size: 13px; padding: 10px; border-radius: 8px; }
-        .msg-info { background: #1c2a3a; color: #8b949e; }
-        .msg-warn { background: #3a281c; color: #d29922; }
-        .msg-ok   { background: #1a3a28; color: #3fb950; }
-    </style>
+.z-btn-row { display: flex; gap: 5px; }
+.z-btn {
+  flex: 1; padding: 12px 4px; border: 1.5px solid #9e6a03; border-radius: 8px;
+  background: #0d1117; font-size: 13px; font-weight: 700;
+  cursor: pointer; text-align: center;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  color: #d29922;
+}
+.z-btn.pressed { background: #1f1808; }
+.z-readout { font-size: 9px; color: #d29922; text-align: center; }
+
+.roll-section { display: flex; flex-direction: column; gap: 2px; }
+.roll-label-row { display: flex; justify-content: space-between; font-size: 9px; color: #484f58; }
+.roll-track-h {
+  width: 100%; height: 36px; border-radius: 18px;
+  border: 1.5px solid #30363d; background: #131820;
+  position: relative; touch-action: none; overflow: hidden;
+}
+.roll-track-h::after { content: ''; position: absolute; height: 100%; width: 1px;
+  left: 50%; background: #1c2128; pointer-events: none; }
+.roll-puck-h {
+  position: absolute; width: 32px; height: 32px; border-radius: 50%;
+  top: 50%; transform: translate(-50%, -50%); left: 50%;
+  background: radial-gradient(circle at 35% 30%, #79c0ff, #1f6feb);
+  box-shadow: 0 0 8px rgba(31,111,235,0.4); pointer-events: none;
+}
+.roll-puck-h.active { box-shadow: 0 0 16px rgba(31,111,235,0.8); }
+
+/* ── Z vertical slider ── */
+.z-slide-section { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.z-slide-label-top, .z-slide-label-bot { font-size: 9px; color: #484f58; }
+.z-slide-label-top { color: #3fb950; }
+.z-slide-label-bot { color: #f85149; }
+.z-track-v {
+  width: 36px; height: 80px; border-radius: 18px;
+  border: 1.5px solid #30363d; background: #131820;
+  position: relative; touch-action: none; overflow: hidden;
+  align-self: center;
+}
+.z-track-v::after { content: ''; position: absolute; width: 100%; height: 1px;
+  top: 50%; background: #1c2128; pointer-events: none; }
+.z-puck-v {
+  position: absolute; width: 28px; height: 28px; border-radius: 50%;
+  left: 50%; transform: translate(-50%, -50%); top: 50%;
+  background: radial-gradient(circle at 35% 30%, #7ee787, #238636);
+  box-shadow: 0 0 8px rgba(35,134,54,0.4); pointer-events: none;
+}
+.z-puck-v.active { box-shadow: 0 0 16px rgba(35,134,54,0.8); }
+.z-readout-v { font-size: 9px; color: #3fb950; text-align: center; }
+
+/* ── Bottom bar ── */
+.bottom-bar {
+  flex-shrink: 0; display: flex; gap: 6px;
+  padding: 5px 10px; justify-content: center; align-items: center;
+  background: #0d1117; border-top: 1px solid #21262d;
+}
+.gear-btn {
+  flex: 1; max-width: 48px; padding: 8px 4px;
+  border: 1px solid #30363d; border-radius: 6px;
+  background: #161b22; color: #6e7681; font-size: 12px; font-weight: 700;
+  cursor: pointer; text-align: center; touch-action: manipulation;
+}
+.gear-btn.active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+.reset-btn {
+  flex: 1; max-width: 64px; padding: 8px 4px;
+  border: 1px solid #9e6a03; border-radius: 6px;
+  background: #161b22; color: #d29922; font-size: 12px; font-weight: 700;
+  cursor: pointer; touch-action: manipulation;
+}
+.reset-btn:active { background: #1f1808; }
+
+/* ── Overlays ── */
+.disconnect-overlay {
+  position: fixed; inset: 0; background: rgba(10,14,20,0.9);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;
+}
+.disconnect-overlay .reconnect-text { font-size: 18px; font-weight: 600; color: #f85149; margin-bottom: 8px; }
+.disconnect-overlay .reconnect-hint { font-size: 13px; color: #6e7681; }
+.qr-card {
+  position: fixed; inset: 0; background: rgba(10,14,20,0.95);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+}
+.qr-card h2 { font-size: 16px; margin-bottom: 14px; color: #6e7681; }
+.qr-card img { width: 180px; height: 180px; border: 2px solid #21262d; border-radius: 8px; }
+.qr-card .qr-url { font-size: 11px; color: #58a6ff; margin-top: 10px; word-break: break-all; max-width: 90%; text-align: center; }
+.qr-card .skip-btn {
+  margin-top: 18px; padding: 10px 30px; border: 1px solid #30363d; border-radius: 8px;
+  background: #161b22; color: #c9d1d9; font-size: 14px; cursor: pointer;
+}
+.hidden { display: none !important; }
+</style>
 </head>
 <body>
-<div class="container">
 
-    <div class="card">
-        <div class="status-bar">
-            <span><span class="status-dot dot-red" id="ws-dot"></span><span id="ws-text">未连接</span></span>
-            <span><span class="status-dot dot-gray" id="sensor-dot"></span><span id="sensor-text">传感器: 等待</span></span>
+<div class="qr-card hidden" id="qr-card">
+  <h2>扫描二维码连接</h2>
+  <img id="qr-img" src="" alt="QR" />
+  <div class="qr-url" id="qr-url"></div>
+  <button class="skip-btn" id="skip-qr">跳过，已连接</button>
+</div>
+
+<div class="disconnect-overlay hidden" id="disconnect-overlay">
+  <div class="reconnect-text">&#9888; 连接已断开</div>
+  <div class="reconnect-hint">正在自动重连...</div>
+</div>
+
+<div class="container hidden" id="main-ui">
+  <div class="status-bar">
+    <span class="status-left">
+      <span class="status-dot dot-red" id="ws-dot"></span>
+      <span id="ws-text">未连接</span>
+    </span>
+    <div class="toggle-row">
+      <label class="toggle"><input type="checkbox" id="enable-toggle"><span class="toggle-slider"></span></label>
+      <span class="toggle-label" id="toggle-text" style="color:#f85149;">关闭</span>
+    </div>
+    <span class="status-info">
+      <span id="gear-display" style="color:#58a6ff;">N</span>
+      <span id="gripper-display" style="color:#484f58;">夹爪 -</span>
+    </span>
+  </div>
+
+  <div class="main-area">
+    <!-- Left: XY Joystick (absolute position) -->
+    <div class="panel" id="panel-left">
+      <div class="panel-hdr">平移 XY</div>
+      <div class="panel-left-body">
+        <div class="joystick-circle" id="joy-xy">
+          <svg class="workspace-svg" id="workspace-svg" viewBox="0 0 100 100">
+            <!-- Left half gray overlay (non-working area behind base) -->
+            <path d="M 50 2 A 48 48 0 0 0 50 98 Z" fill="rgba(0,0,0,0.15)"/>
+            <!-- Base exclusion zone (dashed red circle) -->
+            <circle cx="50" cy="50" r="12" fill="none" stroke="rgba(248,81,73,0.25)" stroke-width="1" stroke-dasharray="2 3"/>
+            <!-- Workspace boundary rings (dashed blue, centered on base) -->
+            <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(88,166,255,0.10)" stroke-width="0.7" stroke-dasharray="2 5"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="0.6" stroke-dasharray="3 6"/>
+            <!-- Base marker -->
+            <circle cx="50" cy="50" r="4" fill="rgba(248,81,73,0.6)" stroke="rgba(248,81,73,0.8)" stroke-width="0.8"/>
+            <text x="50" y="63" text-anchor="middle" fill="rgba(248,81,73,0.6)" font-size="4">基座</text>
+            <!-- HOME marker -->
+            <circle cx="84" cy="50" r="2" fill="none" stroke="rgba(88,166,255,0.4)" stroke-width="0.6" stroke-dasharray="0.8 1.5"/>
+            <text x="84" y="44" text-anchor="middle" fill="rgba(88,166,255,0.3)" font-size="3">归零</text>
+            <!-- EE position dot (updated by JS) -->
+            <circle id="ee-dot" cx="84" cy="50" r="2.5" fill="rgba(88,166,255,0.85)" stroke="#58a6ff" stroke-width="0.5"/>
+          </svg>
+          <div class="joystick-thumb" id="joy-thumb"></div>
         </div>
+        <div class="pos-readout" id="pos-readout">X=0.000 Y=0.000</div>
+      </div>
     </div>
 
-    <!-- QR (hidden after connecting) -->
-    <div class="card qr-section" id="qr-card">
-        <h2>扫描二维码连接</h2>
-        <img id="qr-img" src="" alt="QR" />
-        <div class="qr-url" id="qr-url"></div>
-    </div>
-
-    <!-- Init -->
-    <div class="card hidden" id="init-card">
-        <button class="btn primary" id="init-btn" style="width:100%;padding:14px;font-size:15px;">
-            📡 激活传感器
-        </button>
-        <div class="msg msg-info" id="init-msg" style="margin-top:8px;">
-            点击按钮后缓慢移动设备以激活传感器
+    <!-- Right: Gripper + Z + Roll -->
+    <div class="panel" id="panel-right">
+      <div class="panel-hdr">辅助操作</div>
+      <div class="panel-right-body">
+        <div class="grip-row">
+          <div class="grip-btn open"  id="grip-open">开爪</div>
+          <div class="grip-btn close" id="grip-close">闭爪</div>
         </div>
-    </div>
-
-    <!-- Sensor readout -->
-    <div class="card hidden" id="sensor-card">
-        <div class="sensor-grid">
-            <div class="sensor-item" id="si-alpha"><div class="sensor-label">α (Z / 航向)</div><div class="sensor-value" id="val-alpha">---</div></div>
-            <div class="sensor-item" id="si-beta"><div class="sensor-label">β (X / 俯仰)</div><div class="sensor-value" id="val-beta">---</div></div>
-            <div class="sensor-item" id="si-gamma"><div class="sensor-label">γ (Y / 翻滚)</div><div class="sensor-value" id="val-gamma">---</div></div>
+        <div class="z-btn-row">
+          <div class="z-btn" id="z-up">↑ 抬腕</div>
+          <div class="z-btn" id="z-down">↓ 压腕</div>
         </div>
-        <div class="sensor-count" id="sensor-count">等待传感器数据...</div>
-    </div>
-
-    <!-- Toggle -->
-    <div class="card hidden" id="toggle-card">
-        <div class="toggle-container">
-            <span class="toggle-label" id="toggle-text">🔴 遥操作关闭</span>
-            <label class="toggle"><input type="checkbox" id="enable-toggle"><span class="toggle-slider"></span></label>
+        <div class="z-readout" id="z-readout">P=-0.524 rad</div>
+        <div class="z-slide-section">
+          <div class="z-slide-label-top">▲ 上升</div>
+          <div class="z-track-v" id="z-track">
+            <div class="z-puck-v" id="z-puck"></div>
+          </div>
+          <div class="z-slide-label-bot">▼ 下降</div>
         </div>
-    </div>
-
-    <!-- Gripper -->
-    <div class="card hidden" id="gripper-card">
-        <div class="control-row">
-            <button class="btn" id="grip-open-btn">🖐 夹爪张开</button>
-            <button class="btn danger" id="grip-close-btn">✊ 夹爪闭合</button>
+        <div class="z-readout-v" id="z-height-readout">Z=0.062 m</div>
+        <div class="roll-section">
+          <div class="roll-label-row"><span>◀ 左旋</span><span>腕转</span><span>右旋 ▶</span></div>
+          <div class="roll-track-h" id="roll-track">
+            <div class="roll-puck-h" id="roll-puck"></div>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Sensitivity -->
-    <div class="card hidden" id="sens-card">
-        <div class="slider-row">
-            <label>灵敏度</label>
-            <input type="range" id="sens-slider" min="0.1" max="3.0" value="1.0" step="0.1">
-            <span class="slider-val" id="sens-val">1.0</span>
-        </div>
-    </div>
-
+  <div class="bottom-bar">
+    <div class="gear-btn" data-gear="0" id="gear-c">C</div>
+    <div class="gear-btn active" data-gear="1" id="gear-n">N</div>
+    <div class="gear-btn" data-gear="2" id="gear-s">S</div>
+    <div class="reset-btn" id="reset-btn">⬤ 归零</div>
+  </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 
+// ── Home EE values (must match backend EE_HOME) ──
+const HOME_X = 0.294, HOME_Y = 0.0, HOME_Z = 0.062;
+const HOME_PITCH = -0.524;  // from FK of neutral joints
+const MAX_DXY = 0.35;        // workspace radius from base center
+const MAX_DZ  = 0.10;        // Z range: HOME_Z ± 0.10 (0.005 ~ 0.162)
+const MAX_ROLL = 2.6;
+const PITCH_STEPS = [0.05, 0.10, 0.20];  // C, N, S rad/tap
+// ── Joystick tuning ──
+const DEADZONE = 0.06;       // 6% of radius: snap near home
+const PRECISION_EXP = 1.8;   // >1 = finer control near center (1=linear)
+// ── Base exclusion (must match backend BASE_EXCLUSION_RADIUS) ──
+const BASE_EXCL = 0.12;      // meters, radial min distance from base
+// ── Home joystick position (base-centered) ──
+const HOME_JX = HOME_X / MAX_DXY;  // ~0.84
+const HOME_JY = HOME_Y / MAX_DXY;  // 0
+
 // ── State ──
 let ws = null, isConnected = false;
-let sensorActive = false, enabled = false;
-let gripperClosed = false, sensitivity = 1.0;
-let gripperVel = 0;  // -1=open, 0=stop, +1=close
-let latestSensor = null, sensorEventCount = 0, lastSensorTime = 0;
-let sensorTimer = null;
-let _orientSensor = null;  // Generic Sensor API instance
+let enabled = false;
+
+let tx = HOME_X, ty = HOME_Y;       // absolute XY position
+let tz = HOME_Z;                     // absolute Z height (from Z slider)
+let tp = HOME_PITCH;                 // absolute pitch (from Z buttons)
+let tr = 0.0;                        // absolute roll (from slider)
+let joystick_x = 0, joystick_y = 0;
+
+let gear = 1;
+let gripper = 0;
+let resetFlag = 0;
+let sendTimer = null;
 
 // ── WebSocket ──
-(function connectWS() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(proto + '//' + location.host + '/ws');
-    ws.onopen = () => {
-        isConnected = true;
-        $('ws-dot').className = 'status-dot dot-green';
-        $('ws-text').textContent = '已连接';
-        // Auto-detect mobile and show init immediately
-        if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            $('qr-card').classList.add('hidden');
-        }
-        $('init-card').classList.remove('hidden');
-        $('sensor-card').classList.remove('hidden');
-    };
-    ws.onclose = () => {
-        isConnected = false;
-        $('ws-dot').className = 'status-dot dot-red';
-        $('ws-text').textContent = '断开，重连中...';
-        setTimeout(connectWS, 2000);
-    };
+(function c() {
+  const p = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(p + '//' + location.host + '/ws');
+  ws.onopen = () => {
+    isConnected = true;
+    $('ws-dot').className = 'status-dot dot-green';
+    $('ws-text').textContent = '已连接';
+    $('disconnect-overlay').classList.add('hidden');
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      $('qr-card').classList.add('hidden');
+      $('main-ui').classList.remove('hidden');
+      startSend();
+    } else { $('qr-card').classList.remove('hidden'); }
+  };
+  ws.onclose = () => {
+    isConnected = false; stopSend();
+    $('ws-dot').className = 'status-dot dot-red';
+    $('ws-text').textContent = '断开';
+    $('disconnect-overlay').classList.remove('hidden');
+    setTimeout(c, 2000);
+  };
+  ws.onerror = () => {};
+  ws.onmessage = () => {};
 })();
 
-function sendSensor() {
-    if (!ws || ws.readyState !== WebSocket.OPEN || !sensorActive) return;
-    if (!latestSensor) return;
-    if (Date.now() - lastSensorTime > 2000) return;
-    ws.send(JSON.stringify({
-        type: 'sensor',
-        data: {
-            alpha: latestSensor.alpha ?? 0,
-            beta:  latestSensor.beta  ?? 0,
-            gamma: latestSensor.gamma ?? 0,
-            enabled: enabled,
-            gripper_vel: gripperVel,
-            sensitivity: sensitivity,
-        }
-    }));
+function sendCmd() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    tx: r(tx), ty: r(ty), tz: r(tz), tp: r(tp), tr: r(tr),
+    gear, reset_flag: resetFlag, enabled,
+  }));
+  resetFlag = 0;
+}
+function r(v) { return Math.round(v * 10000) / 10000; }
+function startSend() { if (!sendTimer) sendTimer = setInterval(sendCmd, 33); }
+function stopSend() { if (sendTimer) { clearInterval(sendTimer); sendTimer = null; } }
+
+// ── Pos readout update ──
+function updateReadout() {
+  $('pos-readout').textContent = 'X=' + tx.toFixed(3) + ' Y=' + ty.toFixed(3);
+  $('z-readout').textContent = 'P=' + tp.toFixed(3) + ' rad';
+  $('z-height-readout').textContent = 'Z=' + tz.toFixed(3) + ' m';
 }
 
-// ── Orientation handler (legacy API) ──
-function onOrientation(e) {
-    if (!sensorActive) return;
-    if (e.alpha === null && e.beta === null && e.gamma === null) return;
-    latestSensor = { alpha: e.alpha, beta: e.beta, gamma: e.gamma };
-    sensorEventCount++;
-    lastSensorTime = Date.now();
-    updateSensorUI(e.alpha ?? 0, e.beta ?? 0, e.gamma ?? 0);
-}
-
-// ── Generic Sensor API: quaternion → euler (ZXY convention) ──
-function quatToEuler(q) {
-    // q = [x, y, z, w] from AbsoluteOrientationSensor
-    const x = q[0], y = q[1], z = q[2], w = q[3];
-    // Convert to rotation matrix then to Tait-Bryan ZXY
-    const alpha = Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)) * 180 / Math.PI;
-    const beta  = Math.asin(2 * (w * x - y * z)) * 180 / Math.PI;
-    const gamma = Math.atan2(2 * (w * y + x * z), 1 - 2 * (x * x + y * y)) * 180 / Math.PI;
-    return { alpha, beta, gamma };
-}
-
-function onSensorReading() {
-    if (!sensorActive || !_orientSensor) return;
-    const q = _orientSensor.quaternion;
-    if (!q) return;
-    const euler = quatToEuler(q);
-    latestSensor = { alpha: euler.alpha, beta: euler.beta, gamma: euler.gamma };
-    sensorEventCount++;
-    lastSensorTime = Date.now();
-    updateSensorUI(euler.alpha, euler.beta, euler.gamma);
-}
-
-function updateSensorUI(alpha, beta, gamma) {
-    if (!updateSensorUI._t || Date.now() - updateSensorUI._t > 200) {
-        updateSensorUI._t = Date.now();
-        $('val-alpha').textContent = alpha.toFixed(1) + '°';
-        $('val-beta').textContent  = beta.toFixed(1) + '°';
-        $('val-gamma').textContent = gamma.toFixed(1) + '°';
-        $('sensor-count').textContent = '已收 ' + sensorEventCount + ' 帧';
-        $('sensor-dot').className = 'status-dot dot-blue';
-        $('sensor-text').textContent = '传感器: 活跃';
-        $('si-alpha').classList.add('sensor-live');
-        $('si-beta').classList.add('sensor-live');
-        $('si-gamma').classList.add('sensor-live');
-    }
-}
-
-// Also try devicemotion as backup (rotationRate)
-let _rotationRate = null;
-function onMotion(e) {
-    if (!sensorActive) return;
-    if (e.rotationRate) {
-        _rotationRate = {
-            alpha: e.rotationRate.alpha ?? 0,
-            beta:  e.rotationRate.beta  ?? 0,
-            gamma: e.rotationRate.gamma ?? 0,
-        };
-        // If orientation never fired, use integrated rotationRate
-        if (!latestSensor && sensorEventCount === 0) {
-            if (!onMotion._acc) onMotion._acc = { alpha: 0, beta: 0, gamma: 0 };
-            const dt = 1 / 60;
-            onMotion._acc.alpha += _rotationRate.alpha * dt;
-            onMotion._acc.beta  += _rotationRate.beta  * dt;
-            onMotion._acc.gamma += _rotationRate.gamma * dt;
-            latestSensor = { ...onMotion._acc };
-            sensorEventCount++;
-            lastSensorTime = Date.now();
-        }
-    }
-}
-
-// ── Activation ──
-function startListening() {
-    sensorActive = true;
-    $('qr-card').classList.add('hidden');
-    $('init-card').classList.add('hidden');
-    $('toggle-card').classList.remove('hidden');
-    $('gripper-card').classList.remove('hidden');
-    $('sens-card').classList.remove('hidden');
-    $('sensor-dot').className = 'status-dot dot-blue';
-    $('sensor-text').textContent = '传感器: 活跃';
-    window.addEventListener('deviceorientation', onOrientation, true);
-    window.addEventListener('deviceorientationabsolute', onOrientation, true);
-    window.addEventListener('devicemotion', onMotion, true);
-    sensorTimer = setInterval(sendSensor, 33);
-
-    // Try Generic Sensor API first (Android 15+ / modern Chrome)
-    if (typeof AbsoluteOrientationSensor !== 'undefined') {
-        try {
-            _orientSensor = new AbsoluteOrientationSensor({ frequency: 60 });
-            _orientSensor.addEventListener('reading', onSensorReading);
-            _orientSensor.addEventListener('error', () => {
-                console.warn('AbsoluteOrientationSensor error, trying Relative');
-                _orientSensor = null;
-                tryLegacyOrientation();
-            });
-            _orientSensor.start();
-            $('sensor-count').textContent = 'Generic Sensor API: Absolute';
-            return;
-        } catch (e) {
-            console.warn('AbsoluteOrientationSensor failed:', e.message);
-            _orientSensor = null;
-        }
-    }
-
-    if (typeof RelativeOrientationSensor !== 'undefined') {
-        try {
-            _orientSensor = new RelativeOrientationSensor({ frequency: 60 });
-            _orientSensor.addEventListener('reading', onSensorReading);
-            _orientSensor.addEventListener('error', () => {
-                console.warn('RelativeOrientationSensor error');
-                _orientSensor = null;
-                tryLegacyOrientation();
-            });
-            _orientSensor.start();
-            $('sensor-count').textContent = 'Generic Sensor API: Relative';
-            return;
-        } catch (e) {
-            console.warn('RelativeOrientationSensor failed:', e.message);
-            _orientSensor = null;
-        }
-    }
-
-    // Fallback to legacy DeviceOrientationEvent API
-    tryLegacyOrientation();
-}
-
-function tryLegacyOrientation() {
-    $('sensor-count').textContent = 'Legacy: deviceorientation';
-}
-
-function activateSensors() {
-    // iOS 13+: request permission
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-        $('init-msg').className = 'msg msg-info';
-        $('init-msg').textContent = '请求权限中...';
-        DeviceOrientationEvent.requestPermission()
-            .then(state => {
-                if (state === 'granted') {
-                    $('init-msg').className = 'msg msg-ok';
-                    $('init-msg').textContent = '权限已授予 ✓';
-                    startListening();
-                } else {
-                    $('init-msg').className = 'msg msg-warn';
-                    $('init-msg').textContent = '权限被拒绝！设置 > Safari > 动作与方向访问';
-                }
-            })
-            .catch(err => {
-                $('init-msg').className = 'msg msg-warn';
-                $('init-msg').textContent = '权限失败: ' + err.message;
-            });
-        return;
-    }
-
-    // Android: wait for first valid event, then start
-    let resolved = false;
-    function onFirst(e) {
-        if (resolved) return;
-        if (e.alpha === null && e.beta === null && e.gamma === null) return;
-        resolved = true;
-        $('init-msg').className = 'msg msg-ok';
-        $('init-msg').textContent = '传感器已激活 ✓ (' +
-            (e.type === 'deviceorientationabsolute' ? '绝对' : '相对') + ')';
-        window.removeEventListener('deviceorientation', onFirst);
-        window.removeEventListener('deviceorientationabsolute', onFirst);
-        startListening();
-    }
-    window.addEventListener('deviceorientation', onFirst, true);
-    window.addEventListener('deviceorientationabsolute', onFirst, true);
-
-    $('init-msg').className = 'msg msg-info';
-    $('init-msg').textContent = '正在检测传感器... 请移动设备';
-
-    setTimeout(() => {
-        if (!resolved) {
-            window.removeEventListener('deviceorientation', onFirst);
-            window.removeEventListener('deviceorientationabsolute', onFirst);
-            $('init-msg').className = 'msg msg-warn';
-            $('init-msg').textContent = '⚠ 未检测到 orientation 事件，尝试 devicemotion';
-            resolved = true;
-            startListening();
-        }
-    }, 3000);
-}
-
-// ── QR ──
-(function() {
-    const url = location.href;
-    $('qr-url').textContent = url;
-    $('qr-img').src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url);
-})();
-
-// ── Controls ──
-$('init-btn').addEventListener('click', activateSensors);
+// ── Toggle ──
 $('enable-toggle').addEventListener('change', function() {
-    enabled = this.checked;
-    $('toggle-text').textContent = enabled ? '🟢 遥操作开启' : '🔴 遥操作关闭';
+  enabled = this.checked;
+  $('toggle-text').textContent = enabled ? '开启' : '关闭';
+  $('toggle-text').style.color = enabled ? '#3fb950' : '#f85149';
+  if (enabled) {
+    $('panel-left').classList.remove('disabled');
+    $('panel-right').classList.remove('disabled');
+  } else {
+    $('panel-left').classList.add('disabled');
+    $('panel-right').classList.add('disabled');
+    tx = HOME_X; ty = HOME_Y; tz = HOME_Z; tp = HOME_PITCH; tr = 0;
+    resetJoy(); resetRoll(); resetZ();
+  }
 });
-$('grip-open-btn').addEventListener('mousedown', () => { gripperVel = -1; $('grip-open-btn').classList.add('active'); });
-$('grip-open-btn').addEventListener('mouseup',   () => { gripperVel = 0;  $('grip-open-btn').classList.remove('active'); });
-$('grip-open-btn').addEventListener('mouseleave',() => { gripperVel = 0;  $('grip-open-btn').classList.remove('active'); });
-$('grip-open-btn').addEventListener('touchstart',() => { gripperVel = -1; $('grip-open-btn').classList.add('active'); });
-$('grip-open-btn').addEventListener('touchend',  () => { gripperVel = 0;  $('grip-open-btn').classList.remove('active'); });
-$('grip-close-btn').addEventListener('mousedown', () => { gripperVel = 1; $('grip-close-btn').classList.add('active'); });
-$('grip-close-btn').addEventListener('mouseup',   () => { gripperVel = 0; $('grip-close-btn').classList.remove('active'); });
-$('grip-close-btn').addEventListener('mouseleave',() => { gripperVel = 0; $('grip-close-btn').classList.remove('active'); });
-$('grip-close-btn').addEventListener('touchstart',() => { gripperVel = 1; $('grip-close-btn').classList.add('active'); });
-$('grip-close-btn').addEventListener('touchend',  () => { gripperVel = 0; $('grip-close-btn').classList.remove('active'); });
-$('sens-slider').addEventListener('input', function() {
-    sensitivity = parseFloat(this.value);
-    $('sens-val').textContent = sensitivity.toFixed(1);
+
+$('skip-qr').addEventListener('click', () => {
+  $('qr-card').classList.add('hidden');
+  $('main-ui').classList.remove('hidden');
+  startSend();
 });
+
+function onPress(el) { el.classList.add('pressed'); }
+function offPress(el) { el.classList.remove('pressed'); }
+
+// ═══════════════════════════════════════
+//  XY Joystick → absolute tx, ty
+// ═══════════════════════════════════════
+(function() {
+  const ctr = $('joy-xy'), th = $('joy-thumb');
+  let tid = null;
+
+  // Position the base-exclusion ring on the joystick circle
+  function layoutExclusionRing() {
+    const w = ctr.offsetWidth, h = ctr.offsetHeight;
+    const hw = w/2, hh = h/2, thr = th.offsetWidth/2, R = hw - thr - 3;
+    // Base-centered: exclusion at BASE_EXCL / MAX_DXY fraction of joystick radius
+    const ringFraction = BASE_EXCL / MAX_DXY;  // 0.12 / 0.35 ≈ 0.34
+    const ringRadius = R * ringFraction;
+    const ringSize = 2 * ringRadius;
+    ctr.style.setProperty('--ring-size', ringSize + 'px');
+    const sheet = document.styleSheets[0];
+    try {
+      for (let i = sheet.cssRules.length-1; i >= 0; i--) {
+        if (sheet.cssRules[i].selectorText === '.joystick-circle::before') {
+          sheet.deleteRule(i);
+        }
+      }
+    } catch(e) {}
+    sheet.insertRule(
+      `.joystick-circle::before { width: ${ringSize}px; height: ${ringSize}px; ` +
+      `top: ${hh - ringRadius}px; left: ${hw - ringRadius}px; }`,
+      sheet.cssRules.length
+    );
+  }
+
+  function upd(cx, cy) {
+    const w = ctr.offsetWidth, h = ctr.offsetHeight;
+    const hw = w/2, hh = h/2, thr = th.offsetWidth/2, R = hw - thr - 3;
+    const dx = cx - hw, dy = cy - hh;
+    const d = Math.sqrt(dx*dx+dy*dy), cd = Math.min(d, R);
+    const norm = cd / R;  // 0..1
+
+    // Thumb stays at finger position (visual feedback)
+    const a = Math.atan2(dy, dx);
+    th.style.left = (hw + Math.cos(a)*cd) + 'px';
+    th.style.top  = (hh + Math.sin(a)*cd) + 'px';
+
+    // Raw joystick [-1, 1] values (center = base origin)
+    let jx = d < 0.001 ? HOME_JX : (cd/R)*(dx/d);
+    let jy = d < 0.001 ? HOME_JY : (cd/R)*(dy/d);
+
+    // Deadzone around HOME position: snap if near home
+    const dHome = Math.sqrt((jx-HOME_JX)*(jx-HOME_JX) + (jy-HOME_JY)*(jy-HOME_JY));
+    if (dHome < DEADZONE) {
+      jx = HOME_JX; jy = HOME_JY;
+    } else {
+      // Non-linear mapping for precision (relative to HOME) (defer to linear for simplicity)
+    }
+
+    joystick_x = jx; joystick_y = jy;
+    // Map joystick directly to world coordinates (base = origin)
+    tx = r(joystick_x * MAX_DXY);
+    ty = r(joystick_y * MAX_DXY);
+
+    // Clamp to base exclusion zone
+    const rr = Math.sqrt(tx*tx + ty*ty);
+    if (rr < BASE_EXCL && rr > 1e-8) {
+      const sc = BASE_EXCL / rr;
+      tx = r(tx * sc); ty = r(ty * sc);
+      joystick_x = tx / MAX_DXY;
+      joystick_y = ty / MAX_DXY;
+    }
+
+    updateReadout();
+    // Update EE position dot in workspace SVG — base at center (50,50)
+    const eeDot = document.getElementById('ee-dot');
+    if (eeDot) {
+      let dotCx = 50 + joystick_x * 42;
+      let dotCy = 50 + joystick_y * 42;
+      // Visual clamp: keep dot outside base marker
+      const distB = Math.sqrt((dotCx-50)*(dotCx-50) + (dotCy-50)*(dotCy-50));
+      const minDist = 8;
+      if (distB < minDist && distB > 0.01) {
+        const s = minDist / distB;
+        dotCx = 50 + (dotCx-50) * s;
+        dotCy = 50 + (dotCy-50) * s;
+      }
+      eeDot.setAttribute('cx', dotCx.toFixed(1));
+      eeDot.setAttribute('cy', dotCy.toFixed(1));
+    }
+  }
+  function rst() {
+    tid = null; th.classList.remove('active');
+    // Snap thumb to HOME position (base-centered, ~84% right)
+    const w = ctr.offsetWidth, h = ctr.offsetHeight;
+    const hw = w/2, hh = h/2, thr = th.offsetWidth/2, R = hw - thr - 3;
+    th.style.left = (hw + HOME_JX * R) + 'px';
+    th.style.top  = (hh + HOME_JY * R) + 'px';
+    joystick_x = HOME_JX; joystick_y = HOME_JY;
+    tx = HOME_X; ty = HOME_Y;
+    // Reset EE dot to HOME
+    const eeDot = document.getElementById('ee-dot');
+    if (eeDot) { eeDot.setAttribute('cx', '84'); eeDot.setAttribute('cy', '50'); }
+    updateReadout();
+  }
+  window.resetJoy = rst;
+
+  // Layout the exclusion ring on resize and init
+  window.addEventListener('resize', layoutExclusionRing);
+  ctr.addEventListener('touchstart', e => {
+    if (!enabled) return; e.preventDefault();
+    if (tid !== null) return;
+    tid = e.changedTouches[0].identifier;
+    th.classList.add('active');
+    layoutExclusionRing();
+    const rc = ctr.getBoundingClientRect();
+    upd(e.changedTouches[0].clientX - rc.left, e.changedTouches[0].clientY - rc.top);
+  });
+  ctr.addEventListener('touchmove', e => {
+    if (!enabled) return; e.preventDefault();
+    for (let i=0; i<e.changedTouches.length; i++)
+      if (e.changedTouches[i].identifier === tid) {
+        const rc = ctr.getBoundingClientRect();
+        upd(e.changedTouches[i].clientX - rc.left, e.changedTouches[i].clientY - rc.top);
+        return;
+      }
+  });
+  ctr.addEventListener('touchend', e => {
+    for (let i=0; i<e.changedTouches.length; i++)
+      if (e.changedTouches[i].identifier === tid) { rst(); return; }
+  });
+  ctr.addEventListener('touchcancel', rst);
+})();
+
+// ═══════════════════════════════════════
+//  Z buttons: tap to step Z
+// ═══════════════════════════════════════
+//  Z buttons → control pitch (EE pointing direction)
+['z-up','z-down'].forEach(id => {
+  const el = $(id);
+  el.addEventListener('touchstart', e => {
+    e.preventDefault(); onPress(el);
+    const step = PITCH_STEPS[gear];
+    if (id === 'z-up') {
+      tp = r(Math.min(Math.PI/2, tp + step));
+    } else {
+      tp = r(Math.max(-Math.PI/2, tp - step));
+    }
+    updateReadout();
+  });
+  el.addEventListener('touchend', e => { offPress(el); });
+  el.addEventListener('touchcancel', () => { offPress(el); });
+});
+
+// ═══════════════════════════════════════
+//  Z vertical slider → absolute tz height
+// ═══════════════════════════════════════
+(function() {
+  const trk = $('z-track'), pk = $('z-puck');
+  let tid = null;
+
+  function upd(cy) {
+    const h = trk.offsetHeight, hh = h/2, ph = pk.offsetHeight/2;
+    const py = Math.max(0, Math.min(h - pk.offsetHeight, cy - ph));
+    // Invert: top of track = higher Z, bottom = lower Z
+    const v = Math.max(-1, Math.min(1, -((py+ph)-hh)/(hh-ph)));
+    pk.style.top = py + 'px';
+    tz = r(HOME_Z + v * MAX_DZ);
+    // Clamp to workspace bounds
+    tz = Math.max(0.005, Math.min(0.30, tz));
+    updateReadout();
+  }
+  function rst() {
+    tid = null; pk.classList.remove('active');
+    pk.style.top = '50%'; tz = HOME_Z;
+    updateReadout();
+  }
+  window.resetZ = rst;
+
+  trk.addEventListener('touchstart', e => {
+    if (!enabled) return; e.preventDefault();
+    if (tid !== null) return;
+    tid = e.changedTouches[0].identifier;
+    pk.classList.add('active');
+    upd(e.changedTouches[0].clientY - trk.getBoundingClientRect().top);
+  });
+  trk.addEventListener('touchmove', e => {
+    if (!enabled) return; e.preventDefault();
+    for (let i=0; i<e.changedTouches.length; i++)
+      if (e.changedTouches[i].identifier === tid) {
+        upd(e.changedTouches[i].clientY - trk.getBoundingClientRect().top);
+        return;
+      }
+  });
+  trk.addEventListener('touchend', e => {
+    // Do NOT auto-reset: Z height persists after release
+    for (let i=0; i<e.changedTouches.length; i++)
+      if (e.changedTouches[i].identifier === tid) {
+        tid = null; pk.classList.remove('active'); return;
+      }
+  });
+  trk.addEventListener('touchcancel', () => {
+    tid = null; pk.classList.remove('active');
+  });
+})();
+
+//  Gripper — send immediately on touchstart to avoid tap loss
+function sendGripCmd(cmd) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    tx: r(tx), ty: r(ty), tz: r(tz), tp: r(tp), tr: r(tr),
+    gear, gripper: cmd, reset_flag: 0, enabled,
+  }));
+}
+
+(function() {
+  const oe = $('grip-open'), ce = $('grip-close');
+  oe.addEventListener('touchstart', e => {
+    e.preventDefault(); onPress(oe);
+    gripper = 1; $('gripper-display').textContent = '夹爪 开';
+    sendGripCmd(1);
+  });
+  oe.addEventListener('touchend', e => {
+    offPress(oe); gripper = 0; $('gripper-display').textContent = '夹爪 -';
+    sendGripCmd(0);
+  });
+  oe.addEventListener('touchcancel', () => {
+    offPress(oe); gripper = 0; $('gripper-display').textContent = '夹爪 -';
+    sendGripCmd(0);
+  });
+  ce.addEventListener('touchstart', e => {
+    e.preventDefault(); onPress(ce);
+    gripper = 2; $('gripper-display').textContent = '夹爪 闭';
+    sendGripCmd(2);
+  });
+  ce.addEventListener('touchend', e => {
+    offPress(ce); gripper = 0; $('gripper-display').textContent = '夹爪 -';
+    sendGripCmd(0);
+  });
+  ce.addEventListener('touchcancel', () => {
+    offPress(ce); gripper = 0; $('gripper-display').textContent = '夹爪 -';
+    sendGripCmd(0);
+  });
+})();
+
+// ═══════════════════════════════════════
+//  Roll horizontal slider → absolute tr
+// ═══════════════════════════════════════
+(function() {
+  const trk = $('roll-track'), pk = $('roll-puck');
+  let tid = null;
+
+  function upd(cx) {
+    const w = trk.offsetWidth, hw = w/2, pw = pk.offsetWidth/2;
+    const px = Math.max(0, Math.min(w - pk.offsetWidth, cx - pw));
+    const v = Math.max(-1, Math.min(1, ((px+pw)-hw)/(hw-pw)));
+    pk.style.left = px + 'px';
+    tr = r(v * MAX_ROLL);
+  }
+  function rst() {
+    tid = null; pk.classList.remove('active');
+    pk.style.left = '50%'; tr = 0;
+  }
+  window.resetRoll = rst;
+
+  trk.addEventListener('touchstart', e => {
+    if (!enabled) return; e.preventDefault();
+    if (tid !== null) return;
+    tid = e.changedTouches[0].identifier;
+    pk.classList.add('active');
+    upd(e.changedTouches[0].clientX - trk.getBoundingClientRect().left);
+  });
+  trk.addEventListener('touchmove', e => {
+    if (!enabled) return; e.preventDefault();
+    for (let i=0; i<e.changedTouches.length; i++)
+      if (e.changedTouches[i].identifier === tid) {
+        upd(e.changedTouches[i].clientX - trk.getBoundingClientRect().left);
+        return;
+      }
+  });
+  trk.addEventListener('touchend', e => {
+    // Do NOT auto-reset: roll value persists after release
+    for (let i=0; i<e.changedTouches.length; i++)
+      if (e.changedTouches[i].identifier === tid) {
+        tid = null; pk.classList.remove('active'); return;
+      }
+  });
+  trk.addEventListener('touchcancel', () => {
+    tid = null; pk.classList.remove('active');
+  });
+})();
+
+// ── Gear ──
+['gear-c','gear-n','gear-s'].forEach((id,i) => {
+  $(id).addEventListener('click', () => {
+    gear = i;
+    $('gear-display').textContent = ['C','N','S'][i];
+    document.querySelectorAll('.gear-btn').forEach(b => b.classList.remove('active'));
+    $(id).classList.add('active');
+  });
+});
+
+// ── Reset ──
+$('reset-btn').addEventListener('click', () => {
+  resetFlag = 1;
+  tx = HOME_X; ty = HOME_Y; tz = HOME_Z; tp = HOME_PITCH; tr = 0;
+  resetJoy(); resetZ(); resetRoll();
+  updateReadout();
+});
+
+// QR
+(function(){const u=location.href;$('qr-url').textContent=u;
+  $('qr-img').src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(u);})();
+
+$('panel-left').classList.add('disabled');
+$('panel-right').classList.add('disabled');
+updateReadout();
 </script>
 </body>
 </html>
