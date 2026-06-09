@@ -1,0 +1,36 @@
+# SO101 语音控制健身 Demo 配置文件
+follower:
+  port: /dev/ttyACM0
+  use_degrees: true
+  id: my_follower_arm
+
+voice:
+  model_path: vosk-model-small-cn-0.22
+  commands:
+    fly_bird: ["飞鸟", "飞"]
+    shoulder_press: ["推肩", "推荐", "肩推", "哑铃推肩"]
+    face_pull: ["面拉", "拉面", "拉"]
+    row: ["划船", "船", "划"]
+    stop: ["停止", "停", "停下"]
+    go_home: ["归零", "回家", "归位", "初始"]
+
+# 录制的健身动作轨迹 (LeRobot dataset 目录)
+trajectories:
+  fly_bird: trajectories/fly_bird
+  shoulder_press: trajectories/shoulder_press
+  face_pull: trajectories/face_pull
+  row: trajectories/row
+
+# 固定位姿 (关节角度)
+poses:
+  go_home:
+    shoulder_pan: 0.79
+    shoulder_lift: -107.38
+    elbow_flex: 84.66
+    wrist_flex: 21.67
+    wrist_roll: 77.05
+    gripper: 2.31
+
+playback:
+  fps: 30
+  transition_time_s: 2.0

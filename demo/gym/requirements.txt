@@ -1,0 +1,5 @@
+vosk>=0.3.45
+pyarrow>=14.0
+pyyaml>=6.0
+numpy>=1.24
+pyaudio>=0.2.14
